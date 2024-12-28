@@ -2,6 +2,7 @@ package main
 
 import (
 	"database/sql"
+	"github.com/joho/godotenv"
 	"log"
 	"net/http"
 	"os"
@@ -9,12 +10,21 @@ import (
 	"strconv"
 
 	_ "github.com/mattn/go-sqlite3"
-	"go_final_project/tests"
 )
 
-var webDir = "./web" // Путь к директории с веб-ресурсами
+func LoadEnv() {
+	// Загружаем переменные окружения из файла .env
+	err := godotenv.Load()
+	if err != nil {
+		log.Println("Ошибка загрузки .env файла, используем значения по умолчанию")
+	}
+}
 
-func openDB(createTable bool) (*sql.DB, error) {
+var (
+	webDir = "./web" // Путь к директории с веб-ресурсами
+)
+
+func openDB(scheduler bool) (*sql.DB, error) {
 	// Определяем путь к файлу базы данных через переменную окружения или по умолчанию
 	dbFile := os.Getenv("TODO_DBFILE")
 	if dbFile == "" {
@@ -32,8 +42,8 @@ func openDB(createTable bool) (*sql.DB, error) {
 	}
 
 	// Если необходимо, создаем таблицу и индекс
-	if createTable {
-		createTableDB := `
+	if scheduler {
+		var scheduler = `
             CREATE TABLE IF NOT EXISTS scheduler (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 date TEXT NOT NULL,
@@ -44,19 +54,35 @@ func openDB(createTable bool) (*sql.DB, error) {
             CREATE INDEX IF NOT EXISTS idx_date ON scheduler(date);
         `
 		// Выполняем запрос
-		_, err = db.Exec(createTableDB)
+		_, err = db.Exec(scheduler)
 		if err != nil {
+			log.Printf("Ошибка при создании таблицы: %v", err)
 			return nil, err
 		}
-		log.Println("Таблица scheduler создана.")
+		log.Println("Таблица scheduler создана или уже существует.")
 	}
 
 	return db, nil
 }
 
 func main() {
-	port := tests.Port // Используем порт из тестового пакета
+	// Загружаем переменные окружения
+	LoadEnv()
 
+	// Получаем порт из переменной окружения или используем значение по умолчанию
+	portStr := os.Getenv("PORT")
+	if portStr == "" {
+		portStr = "8080" // Значение по умолчанию
+	}
+	log.Println("Используем порт:", portStr) // Логируем порт для отладки
+
+	// Преобразуем порт в целое число
+	port, err := strconv.Atoi(portStr)
+	if err != nil {
+		log.Fatalf("Ошибка преобразования порта: %v", err)
+	}
+
+	// Открываем базу данных и создаем таблицы
 	db, err := openDB(true) // Передаем true, чтобы создать таблицы
 	if err != nil {
 		log.Fatalf("Ошибка при открытии базы данных: %v", err)
